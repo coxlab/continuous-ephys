@@ -7,7 +7,8 @@ sys.path.append('/Volumes/Mac HD/Dropbox (coxlab)/Scripts/Repositories/continuou
 #import timebase
 import OpenEphys
 import matplotlib.pyplot as plt
-
+import pickle
+import csv
 
 def do_stuff():
 	print("Greg does stuff")
@@ -26,10 +27,19 @@ eventsfile = "/Volumes/GG Data Raid/Ephys/2015-04-29_17-35-04_digitalinputtest/a
 events_data = OpenEphys.load(eventsfile)
 # this will be a [#number of events x 1] vector with integer entries; want to turn it into matrix by channel number:
 
-#print "length of digital data is: ", len(events_data['channel'])
-#print "length of digital timestamps is: ", len(events_data['timestamps'])
-plt.plot(events_data['channel'])
-plt.show()
+print "length of digital data is: ", len(events_data['channel'])
+print "length of digital timestamps is: ", len(events_data['timestamps'])
+print "events_data keys:", events_data.keys()
+#pickle.dump( events_data, open( "save.p", "wb" ) )
+
+writer = csv.writer(open('events_data.csv', 'wb'))
+for key, value in events_data.items():
+   writer.writerow([key, value])
+
+
+
+#plt.plot(events_data['channel'])
+#plt.show()
 #print events_data['channel']
 
 
