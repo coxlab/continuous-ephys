@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 
 import ast, copy, logging, warnings
-
+import sys, os 
 import numpy as np
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
-    import scikits.audiolab as al
+   # import scikits.audiolab as al # commented out by GG 5/8/15 11:05am
 # import tables
-
-from .. import h5
-from .. import dsp
-from .. import utils
+#sys.path.append('/Volumes/Mac HD/Dropbox (coxlab)/Scripts/Repositories/continuous-ephys/physiology_analysis/physio')
+#from .. import h5
+#from .. import dsp
+#from .. import utils
 
 # 0 is LSB - 3 is MSB
 # update is bottom -> up so add the most to channel 1
@@ -32,6 +32,7 @@ from .. import utils
 #   ~ 0.24394716764203569 degrees per sample
 
 def find_transitions(signal, threshold = 0.03, refractory = 44):
+  # skip this function
     """
     Find pixel clock transitions
     
@@ -68,7 +69,8 @@ def state_to_code(state):
     code : int
         Reconstructed pixel clock code
     """
-    return sum([state[i] << i for i in xrange(len(state))])
+    return sum([state[i] << i for i in xrange(len(state))]) # << = bit shift operator
+    # this is from photodiode to bit code 
 
 def events_to_codes(events, nchannels, minCodeTime):
     """
@@ -257,7 +259,7 @@ def offset_codes(codes, latencies, pcY, pcHeight, screenHeight, sepRatio):
     logging.debug("Pixel clock channel offsets in samples: %s" % str(offsets))
     return codeArray, offsets, avgSpeed
 
-def reconstruct_codes(events, nchannels = 4, minCodeTime = 441,\
+def reconstruct_codes(events, nchannels = 2, minCodeTime = 441,\
                     pcY = -28, pcHeight = 8.5, screenHeight = 64.54842055808264, sepRatio = 0.2):
     """
     Parameters
@@ -499,7 +501,7 @@ def test_matches():
     
     return matches
 
-def parse(audioFiles, threshold = 0.03, refractory = 44, minCodeTime = 441,
+def parse(pc_data, threshold = 0.03, refractory = 44, minCodeTime = 441,
                     pcY = -28, pcHeight = 8.5, screenHeight = 64.54842055808264, sepRatio = 0.2):
     """
     Parse pixel clock from audio files
@@ -541,11 +543,12 @@ def parse(audioFiles, threshold = 0.03, refractory = 44, minCodeTime = 441,
     # channels = []
     # directions = []
     # samplerate = None
-    nchannels = len(audioFiles)
-    events = np.transpose(np.atleast_2d([[],[],[]]))
+    nchannels = 2 #len(audioFiles)
+    events = np.transpose(np.atleast_2d([[],[],[]])) 
+    """
     for (i, af) in enumerate(audioFiles):
         logging.debug("Opening %s" % af)
-        f = al.Sndfile(af,'r')
+        f = al.Sndfile(af,'r')         #commented out by GG 5/10 
         # samplerate = f.samplerate
         logging.debug("Reading %s" % af)
         s = f.read_frames(f.nframes)
@@ -566,7 +569,11 @@ def parse(audioFiles, threshold = 0.03, refractory = 44, minCodeTime = 441,
         # cleanup
         f.close()
         del s, t
-    
+    """
+    # events should be = to our [pixel_ch1, pixel_ch2]
+    #events = pc_data
+    events = np.array([[range(0,50)], [np.random.randint(2, size=50)], [np.random.randint(2, size=50)]])
+    print len(events)
     logging.debug("Reconstructing codes")
     codes, offsets, speed = reconstruct_codes(events, nchannels, minCodeTime, pcY, pcHeight, screenHeight, sepRatio)
     return codes, offsets, speed
@@ -644,7 +651,7 @@ def test_get_events():
     assert False
     pass
 
-def process(audioFiles, mwTimes, mwCodes, threshold = 0.03, refractory = 44, minCodeTime = 441,
+def process(pc_data, mwTimes, mwCodes, threshold = 0.03, refractory = 44, minCodeTime = 441,
                     pcY = -28, pcHeight = 8.5, screenHeight = 64.54842055808264, sepRatio = 0.2,
                     minMatch = 10, maxErr = 0):
     """
@@ -682,7 +689,7 @@ def process(audioFiles, mwTimes, mwCodes, threshold = 0.03, refractory = 44, min
     avgSpeed : float
         Average speed of screen refresh in degrees per sample
     """
-    codes, offsets, speed = parse(audioFiles, threshold, refractory, minCodeTime, pcY, pcHeight, screenHeight, sepRatio)
+    codes, offsets, speed = parse(pc_data, threshold, refractory, minCodeTime, pcY, pcHeight, screenHeight, sepRatio)
     auTimes = codes[:,0]
     auCodes = codes[:,1]
     matches = match_codes(auTimes, auCodes, mwTimes, mwCodes, minMatch, maxErr)
@@ -779,7 +786,7 @@ def process_from_config(config):
     minMatch = config.getint('pixel clock', 'minmatch')
     maxErr = config.getint('pixel clock', 'maxerr')
     
-    return process(pcFiles, mwT, mwC, threshold, refractory, minCodeTime,\
+    return process(pc_data, mwT, mwC, threshold, refractory, minCodeTime,\
                 pcY, pcHeight, screenHeight, sepRatio, minMatch, maxErr)
 
 if __name__ == '__main__':
