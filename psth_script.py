@@ -1,123 +1,102 @@
 # This is will be our scratch pad
 import sys, os
-sys.path.append('/Volumes/Mac HD/Dropbox (coxlab)/Scripts/Repositories/continuous-ephys/utils')
-sys.path.append('/Volumes/Mac HD/Dropbox (coxlab)/Scripts/Repositories/continuous-ephys/open-ephys analysis/')
-sys.path.append('/Volumes/Mac HD/Dropbox (coxlab)/Behavior/3-port-analysis-master/')
-#import mw_utils
-import pixelclock
-#import timebase
-import OpenEphys
+
+from utils import pixelclock, timebase
+import open_ephys
 import matplotlib.pyplot as plt
 import numpy as np
 from get_bitcode_simple import get_bitcode_simple
 
-
-def do_stuff():
-	print("Greg does stuff")
-
-	# 1. read in ephys binary data and timestamps
-
-		# openEPhys code goes here
-#datafile = "/Volumes/GG Data Raid/Ephys/2015-04-29_17-35-04_digitalinputtest/100_CH9_4.continuous"
-#ephys_data = OpenEphys.load(datafile)
-#print "length of data is: ", len(ephys_data['data'])
-#print "length of timestamps is: ", len(ephys_data['timestamps'])
-
-#plt.plot(ephys_data['data'])
-#plt.show()
-#"/Volumes/labuser/Desktop/EPHYS/"
-
-eventsfile = "/Volumes/GG Data Raid/Ephys/2015-04-29_17-35-04_digitalinputtest/all_channels_4.events"
-events_data = OpenEphys.load(eventsfile)
-
-#want to give a List of 0s and 1s indicating the state of the pixel clock channels to next fnction.
-
-#pixel_events(events_data['channel'] == 3) = 1
+# mworks
+try:
+    sys.path.append('/Library/Application Support/MWorks/Scripting/Python')
+    import mworks.data as mw
+except Exception as e:
+    print("Please install mworks...")
+    print e
 
 
-pixel_ch1 = [] # np.zeros((len(events_data['timestamps']),1))
-pixel_ch2 =  [] #np.zeros((len(events_data['timestamps']),1))
-pixel_ch1_time = [] #np.zeros((len(events_data['timestamps']),1))
-pixel_ch2_time = []
-
-counter = 0
-while counter < len(events_data['timestamps']): # go thru all timestamps
-	if events_data['channel'][counter] == 3:
-		
-		pixel_ch1.append(1)
-		#pixel_ch1[counter] = 1
-		pixel_ch1_time.append(events_data['timestamps'][counter])
-		 
-	elif events_data['channel'][counter] == 4:
-		pixel_ch2.append(2)
-		pixel_ch2_time.append(events_data['timestamps'][counter])
-	else:
-		pass
-
-	counter += 1
+def isiterable(o):
+    return hasattr(o, '__iter__')
 
 
-"""
-pixel_ch1.tolist()
-pixel_ch2.tolist()
-pixel_ch1 = [j for i in pixel_ch1 for j in i]
-pixel_ch2 = [j for i in pixel_ch2 for j in i]
-pixel_ch1 = [int(i) for i in pixel_ch1]
-pixel_ch2 = [int(i) for i in pixel_ch2]
-"""
+def sync_pixel_clock(mwk_path, oe_path, oe_channels=[0, 1]):
 
-#pixel_data = np.array([pixel_ch1, pixel_ch2])
+    # 1. read in ephys binary data and timestamps
 
-"""
-# make bit code from the two pixel clock channels - this is probably premature:
-def f(pixel_ch1,pixel_ch2): 
-	return int(str(pixel_ch1) + str(pixel_ch2),2)
+    oe_events = open_ephys.loadEvents(oe_path)
 
-ephys_bit_code = [0] * (len(pixel_ch1))
-for i in range(len(pixel_ch1)):
-	ephys_bit_code[i] = f(pixel_ch1[i],pixel_ch2[i])
-"""
+    # unpack the channels
+    channels = oe_events['channel']
+    directions = oe_events['eventId'] # 0: 1 -> 0, 1: 0 -> 1
+    times = oe_events['timestamps']
+    event_types = oe_events['eventType']
 
+    relevant = [ind for (ind,ch) in enumerate(channels) if ch in oe_channels]
+    channels = channels[relevant]
+    directions = directions[relevant]
+    times = times[relevant]
 
-#plt.plot(events_data['timestamps'],pixel_ch2)
-#plt.show()
-# now we can feed in pixel_ch1 and pixel_ch2 into pixelclock.py
+    # renormalize the channel numbers to 0,1, etc...
+    for i, ch in enumerate(oe_channels):
+        channels[np.where(channels == ch)] = i
 
+    # renormalize direction to 1, -1
+    for i, ch in enumerate(oe_channels):
+        directions[np.where(directions == 0)] = -1
 
+    oe_codes, latencies = pixelclock.events_to_codes(np.vstack((times, channels, directions)).T, len(oe_channels), 10)
 
-#matches, speed = pixelclock.process(pixel_ch1,) #input = audioFiles, mwTimes, mwCodes
- 
-
-	# 2. read in MW pixel clock data
-animal_name = 'test'
-session_filename = 'test_150501.mwk'
-bit_code_data = get_bitcode_simple(animal_name,session_filename)
-mwCodes = bit_code_data['bit_code']
-mwTimes = bit_code_data['time']
-
-#print bit_code_data['bit_code'] # this is the list of codes...
+    print "OpenEphys Codes (timestamp, code, which_channel_triggered)"
+    print oe_codes
 
 
-	# 3. get pixel clock matches
+    # 2, Read in mworks events
+    mwk = mw.MWKFile(mwk_path)
+    mwk.open()
 
-#matches, speed = pixelclock.process(pixel_data, mwTimes, mwCodes)
+    # Start by getting the pixel clock / bit code data
+    stimulus_announces = mwk.get_events(codes=['#announceStimulus'])
 
-	# 4. make a timebase object
+    # bit_codes is a list of (time, code) tuples
+    mw_codes = [(e.time, e.value['bit_code']) for e in stimulus_announces if isiterable(e.value) and 'bit_code' in e.value]
+
+    print "MWorks Pixel Clock Codes"
+    print mw_codes
 
 
-	# 5. read stim events from mw file
+    # 3. get pixel clock matches
 
-		# look at Javier's code
+    matches = pixelclock.match_codes(
+        [evt[0] for evt in oe_codes], # oe times
+        [evt[1] for evt in oe_codes], # oe codes
+        [evt[0] for evt in mw_codes], # mw times
+        [evt[1] for evt in mw_codes], # mw codes
+        minMatch = 5,
+        maxErr = 0)
 
-	# 6. find spikes in openephys data
 
-	# use a simple spike sorter to start (threshold)
+    print "OE Code sequence:"
+    print [evt[1] for evt in oe_codes]
 
-	# 7. plot stuff
+    print "MW Code sequence:"
+    print [evt[1] for evt in mw_codes]
 
-	# probably utilities in physiology_analysis for doing this
+    print "MATCHES:"
+    print matches
+
+    return matches
 
 
 
 if __name__ == "__main__":
-	do_stuff()
+
+    mwk_file = sys.argv[1]
+    oe_file = sys.argv[2]
+
+    matches = sync_pixel_clock(mwk_file, oe_file, oe_channels=[3,4])
+
+    tb = timebase.TimeBase(matches)
+
+    # tb object lets you go back and forth between oe and mw timezones
+

@@ -117,6 +117,7 @@ def events_to_codes(events, nchannels, minCodeTime):
             state.append(0)
         else:
             state.append(1)
+    
     # logging.debug("Initial state: %s = %i" % (state, state_to_code(state)))
     # print evts
     # print "Initial state: %s = %i" % (state, state_to_code(state))

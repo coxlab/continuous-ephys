@@ -28,10 +28,21 @@ def get_session_statistics(animal_name, session_filename):
     #TODO: unfuck this: hard coded paths not ideal for code reuse
     path = 'input/' + 'phase1/' + animal_name + '/' + session_filename
     
-    events_we_want = ['#stimDisplayUpdate','Announce_TrialStart', 'Announce_TrialEnd','success', 'failure', 'ignore']
+    # events_we_want = ['#stimDisplayUpdate','Announce_TrialStart', 'Announce_TrialEnd','success', 'failure', 'ignore']
 
     df = pymworks.open_file(path)
-    events = df.get_events(events_we_want)
+
+    # Start by getting the pixel clock / bit code data
+    stimulus_announces = df.get_events['#announceStimulus']
+
+    # bit_codes is a list of (time, code) tuples
+    bit_codes = [(e.time, e.value['bit_code']) for e in stimuli if 'bit_code' in e.value]
+
+    # ok, now let's grab the pixel clock events out of the open-ephys file
+
+    
+
+
     
     result = []
     index = 0
@@ -68,7 +79,7 @@ def get_session_statistics(animal_name, session_filename):
                         trial_result['bit_code'] = ev.value[1]['bit_code'] # this is the actual bit code on this screen
                         trial_result['stim_name'] = ev.value[0]['name'] # this should be BlankScreen
                       #  print 'stim: ', trial_result['stim_name'], ' and bit code: ', trial_result['bit_code']
-                    elif ev.name == '#stimDisplayUpdate' and len(ev.value) == 3: 
+                    elif ev.name == 'get_#stimDisplayUpdate' and len(ev.value) == 3: 
                       
                       # two options here: 1)blank screen, stimulus, and pixel clock
                       # or 2) blank, pixel, grayscreen (error trial)
